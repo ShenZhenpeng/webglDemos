@@ -1,0 +1,192 @@
+<html>
+<head>
+    <title>Learning WebGL &mdash; lesson 1</title>
+    <script type="text/javascript" src="../static/js/glMatrix-0.9.5.min.js"></script>
+    <!-- 第一个渲染器——即片段渲染器——什么也不做；它简单地规定了被绘制的物体将被绘制成白色 -->
+    <script id="shader-fs" type="x-shader/x-fragment">
+    precision mediump float;
+
+    void main(void) {
+        gl_FragColor = vec4(1.0, 1.0, 1.0, 1.0);
+    }
+    </script>
+    <!-- 第二个渲染器它是一个顶点渲染器,
+        它有两个uniform变量：uMVMatrix和uPMatrix。
+        uniform变量十分有用，因为它们能在渲染器之外获得 -->
+    <script id="shader-vs" type="x-shader/x-vertex">
+    attribute vec3 aVertexPosition;
+
+    uniform mat4 uMVMatrix;
+    uniform mat4 uPMatrix;
+
+    void main(void) {
+        gl_Position = uPMatrix * uMVMatrix * vec4(aVertexPosition, 1.0);
+    }
+</script>
+
+    <script type="text/javascript">
+        /**
+         *
+        使用具有"x-shader/x-vertex"和"x-shader/x-fragment"类型的script标签定义了顶点渲染器和片段渲染器；
+        在initGL函数中初始化了一个WebGL的上下文；
+        使用getShader和initShaders函数装载渲染器到一个WebGL对象中；
+        定义了模型视图矩阵以及操该矩阵的应用函数loadIdentity、multMatrix和mvTranslate；
+        定义了投影矩阵pMatrix和一个操作该矩阵的应用函数perspective；
+        定义setMatrixUniforms函数用于将模型视图矩阵和投影矩阵，以便渲染器能看见它们使用initBuffers加载包含场景对象信息的缓冲区；
+        在适当命名的drawScene函数中绘制场景；
+        定义WebGLStart函数在网页起始位置设置WebGL的环境；
+        最后，我们提供了所需的最少的html代码来显示它。
+         */
+
+        var gl;
+        function initGL(canvas) {
+            try {
+                gl = canvas.getContext("experimental-webgl");
+                gl.viewportWidth = canvas.width;
+                gl.viewportHeight = canvas.height;
+            } catch (e) {
+            }
+            if (!gl) {
+                alert("Could not initialise WebGL, sorry :-(");
+            }
+        }
+
+        function getShader(gl, id) {
+            var shaderScript = document.getElementById(id);
+            if (!shaderScript) {
+                return null;
+            }
+
+            var str = "";
+            var k = shaderScript.firstChild;
+            while (k) {
+                if (k.nodeType == 3) {
+                    str += k.textContent;
+                }
+                k = k.nextSibling;
+            }
+
+            var shader;
+            if (shaderScript.type == "x-shader/x-fragment") {
+                shader = gl.createShader(gl.FRAGMENT_SHADER);
+            } else if (shaderScript.type == "x-shader/x-vertex") {
+                shader = gl.createShader(gl.VERTEX_SHADER);
+            } else {
+                return null;
+            }
+
+            gl.shaderSource(shader, str);
+            gl.compileShader(shader);
+
+            if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+                alert(gl.getShaderInfoLog(shader));
+                return null;
+            }
+
+            return shader;
+        }
+
+        var shaderProgram;
+
+        function initShaders() {
+            var fragmentShader = getShader(gl, "shader-fs");
+            var vertexShader = getShader(gl, "shader-vs");
+
+            shaderProgram = gl.createProgram();
+            gl.attachShader(shaderProgram, vertexShader);
+            gl.attachShader(shaderProgram, fragmentShader);
+            gl.linkProgram(shaderProgram);
+
+            if (!gl.getProgramParameter(shaderProgram, gl.LINK_STATUS)) {
+                alert("Could not initialise shaders");
+            }
+
+            gl.useProgram(shaderProgram);
+
+            shaderProgram.vertexPositionAttribute = gl.getAttribLocation(shaderProgram, "aVertexPosition");
+            // gl.enableVertexAttribArray函数来指示WebGL使用一个数组来为该属性提供数值
+            gl.enableVertexAttribArray(shaderProgram.vertexPositionAttribute);
+
+            shaderProgram.pMatrixUniform = gl.getUniformLocation(shaderProgram, "uPMatrix");
+            shaderProgram.mvMatrixUniform = gl.getUniformLocation(shaderProgram, "uMVMatrix");
+        }
+
+        var mvMatrix = mat4.create();
+        var pMatrix = mat4.create();
+
+        function setMatrixUniforms() {
+            gl.uniformMatrix4fv(shaderProgram.pMatrixUniform, false, pMatrix);
+            gl.uniformMatrix4fv(shaderProgram.mvMatrixUniform, false, mvMatrix);
+        }
+
+        var triangleVertexPositionBuffer;
+        var squareVertexPositionBuffer;
+
+        function initBuffers() {
+            triangleVertexPositionBuffer = gl.createBuffer();
+            gl.bindBuffer(gl.ARRAY_BUFFER, triangleVertexPositionBuffer);
+            var vertices = [
+                0.0,  1.0,  0.0,
+                -1.0, -1.0,  0.0,
+                1.0, -1.0,  0.0
+            ];
+            gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STATIC_DRAW);
+            triangleVertexPositionBuffer.itemSize = 3;
+            triangleVertexPositionBuffer.numItems = 3;
+
+            squareVertexPositionBuffer = gl.createBuffer();
+            gl.bindBuffer(gl.ARRAY_BUFFER, squareVertexPositionBuffer);
+            vertices = [
+                1.0,  1.0,  0.0,
+                -1.0,  1.0,  0.0,
+                1.0, -1.0,  0.0,
+                -1.0, -1.0,  0.0
+            ];
+            gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STATIC_DRAW);
+            squareVertexPositionBuffer.itemSize = 3;
+            squareVertexPositionBuffer.numItems = 4;
+        }
+
+        function drawScene() {
+            gl.viewport(0, 0, gl.viewportWidth, gl.viewportHeight);
+            gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+            mat4.perspective(45, gl.viewportWidth / gl.viewportHeight, 0.1, 100.0, pMatrix);
+
+            mat4.identity(mvMatrix);
+
+            mat4.translate(mvMatrix, [-1.5, 0.0, -7.0]);
+            // 将属性与缓冲区关联在一起
+            gl.bindBuffer(gl.ARRAY_BUFFER, triangleVertexPositionBuffer);
+            gl.vertexAttribPointer(shaderProgram.vertexPositionAttribute, triangleVertexPositionBuffer.itemSize, gl.FLOAT, false, 0, 0);
+            setMatrixUniforms();
+            gl.drawArrays(gl.TRIANGLES, 0, triangleVertexPositionBuffer.numItems);
+
+            mat4.translate(mvMatrix, [3.0, 0.0, 0.0]);
+            gl.bindBuffer(gl.ARRAY_BUFFER, squareVertexPositionBuffer);
+            gl.vertexAttribPointer(shaderProgram.vertexPositionAttribute, squareVertexPositionBuffer.itemSize, gl.FLOAT, false, 0, 0);
+            setMatrixUniforms();
+            gl.drawArrays(gl.TRIANGLE_STRIP, 0, squareVertexPositionBuffer.numItems);
+        }
+
+        function webGLStart() {
+            var canvas = document.getElementById("lesson01-canvas");
+            initGL(canvas);
+            initShaders();
+            initBuffers();
+
+            gl.clearColor(0.0, 0.0, 0.0, 1.0);
+            gl.enable(gl.DEPTH_TEST);
+
+            drawScene();
+        }
+    </script>
+</head>
+
+<body onload="webGLStart();">
+<p>
+    引自<a href="http://article.yeeyan.org/view/centaurtek/100937">学习WebGL —— 第1课 一个三角形和一个正方形</a>
+</p>
+<canvas id="lesson01-canvas" style="border: none;" width="500" height="500"></canvas>
+</body>
+</html>
