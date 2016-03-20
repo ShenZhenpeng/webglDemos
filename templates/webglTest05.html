@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Title</title>
+    <script src="../static/js/webgl-debug.js"></script>
+    <!--<script id="shader-fs" type="x-shader/x-fragment">-->
+        <!--void main(void){-->
+            <!--gl_FragColor = vec4(0.0, 1.0, 1.0, 1.0);-->
+        <!--}-->
+    <!--</script>-->
+    <!--<script id="shader-vs" type="x-shader/x-vertex">-->
+        <!--attribute vec4 aPos;-->
+        <!--void main(){-->
+            <!--gl_Position = aPos;-->
+            <!--gl_PointSize = 20.5;-->
+        <!--}-->
+    <!--</script>-->
+    <script>
+        var vertexShaderSource = "" +
+                "attribute vec4 aPos;"
+                "void main(){" +
+                "   gl_Position = aPos;" +
+                "   gl_PointSize = 20.5;" +
+                "}";
+
+        var fragmentShaderSource = "" +
+                "void main(){" +
+                "   gl_FragColor = vec4(0.0, 1.0, 1.0, 1.0);" +
+                "}";
+
+        function logGLCall(functionName, args) {
+            console.log("gl." + functionName + "(" +
+                    WebGLDebugUtils.glFunctionArgsToString(functionName, args) + ")");
+        }
+
+        function main() {
+
+            var cxt = document.getElementById("example01").getContext("webgl");
+            cxt = WebGLDebugUtils.makeDebugContext(cxt, undefined, logGLCall);
+
+            var program = cxt.createProgram();
+            var vertexShader = cxt.createShader(cxt.VERTEX_SHADER);
+            var fragmentShader = cxt.createShader(cxt.FRAGMENT_SHADER);
+            cxt.shaderSource(vertexShader, vertexShaderSource);
+            cxt.shaderSource(fragmentShader, fragmentShaderSource);
+            cxt.compileShader(vertexShader);
+            cxt.compileShader(fragmentShader);
+            cxt.attachShader(program, vertexShader);
+            cxt.attachShader(program, fragmentShader);
+            cxt.linkProgram(program);
+            cxt.useProgram(program);
+
+            var aPosLocation = cxt.getAttribLocation(program, 'aPos');
+            cxt.vertexAttrib4f(aPosLocation, 0.0, .5, 1.0, 1.0);
+
+            cxt.drawArrays(cxt.POINTS, 0, 1);
+        }
+    </script>
+</head>
+<body onload="main()">
+    <canvas id="example01" height="600" width="600"></canvas>
+</body>
+</html>
