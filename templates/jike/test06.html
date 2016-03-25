@@ -10,21 +10,29 @@
     </style>
     <script src="../../static/js/glMatrix-0.9.5.min.js"></script>
     <script id="shader-vs" type="x-shader/x-vertex">
-    attribute vec3 v3position;
+    attribute vec3 v3Position;
     varying vec2 v_texCoord;
 
-    void main() {
-        v_texCoord = vec2((v3Position.x + 1.0)/2.0, 1.0 - (v3Position.y + 1.0)/2.0);
-        gl_Position = vec4(v3position, 1.0);
+    void main(void) {
+        v_texCoord = vec2((v3Position.x+1.0)/2.0, 1.0 - (v3Position.y + 1.0)/2.0);
+        gl_Position = vec4(v3Position, 1.0);
     }
     </script>
     <script id="shader-fs" type="x-shader/x-fragment">
-    void main() {
-        gl_FragColor = vec4(1.0, 1.0, 1.0, 1.0);  // green
+    #ifdef GL_FRAGMENT_PRECISION_HIGH
+        precision highp float;
+    #else
+        precision mediump float;
+    #endif
+
+    uniform sampler2D s_texture;
+    varying vec2 v_texCoord;
+
+    void main(void) {
+        gl_FragColor = texture2D(s_texture, v_texCoord);
     }
     </script>
     <script>
-
         function ShaderSourceFromScript(scriptID) {
             var shaderScript = document.getElementById(scriptID);
             if(shaderScript == null) return "";
@@ -44,6 +52,8 @@
         var programObject = null;
         var triangleBuffer = null;
         var v3PositionIndex = 0;
+        var textureObject = null;
+        var samplerIndex = -1;
 
         function Init() {
             var myCanvasObject = document.getElementById('myCanvas');
@@ -79,6 +89,8 @@
                 alert('error: programObject'); return;
             }
 
+            samplerIndex = webgl.getUniformLocation(programObject, 's_texture');
+
             webgl.useProgram(programObject);
 
             var jsArrayData = [
@@ -90,18 +102,34 @@
             webgl.bindBuffer(webgl.ARRAY_BUFFER, triangleBuffer);
             webgl.bufferData(webgl.ARRAY_BUFFER, new Float32Array(jsArrayData), webgl.STATIC_DRAW);
 
+            textureObject = webgl.createTexture();
+            webgl.bindTexture(webgl.TEXTURE_2D, textureObject);
+            var img = document.getElementById('myTexture');
+            webgl.texImage2D(webgl.TEXTURE_2D, 0, webgl.RGB, webgl.RGB, webgl.UNSIGNED_BYTE, img);
+
             webgl.clearColor(0.0, 0.0, 0.0, 1.0);
             webgl.clear(webgl.COLOR_BUFFER_BIT);
 
             webgl.bindBuffer(webgl.ARRAY_BUFFER, triangleBuffer);
             webgl.enableVertexAttribArray(v3PositionIndex);
             webgl.vertexAttribPointer(v3PositionIndex, 3, webgl.FLOAT, false, 0, 0);
+
+            webgl.texParameteri(webgl.TEXTURE_2D, webgl.TEXTURE_MIN_FILTER, webgl.NEAREST);
+            webgl.texParameteri(webgl.TEXTURE_2D, webgl.TEXTURE_MAG_FILTER, webgl.NEAREST);
+            webgl.texParameteri(webgl.TEXTURE_2D, webgl.TEXTURE_WRAP_S, webgl.CLAMP_TO_EDGE);
+            webgl.texParameteri(webgl.TEXTURE_2D, webgl.TEXTURE_WRAP_T, webgl.CLAMP_TO_EDGE);
+
+            webgl.activeTexture(webgl.TEXTURE0);
+            webgl.bindTexture(webgl.TEXTURE_2D, textureObject);
+            webgl.uniform1i(samplerIndex, 0);
+
             webgl.drawArrays(webgl.TRIANGLES, 0, 3);
 
         }
     </script>
 </head>
 <body onload="Init()">
-<canvas id="myCanvas"></canvas>
+<canvas id="myCanvas" width="600px" height="450px"></canvas>
+<img id="myTexture" src='../../static/images/001.jpg'>
 </body>
 </html>
