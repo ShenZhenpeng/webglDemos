@@ -46,6 +46,8 @@
             text-align: center;
             -moz-user-select: none;
             -webkit-user-select: none;
+            -ms-user-select: none;
+            -khtml-user-select: none;
             user-select: none;
         }
     </style>
@@ -61,17 +63,59 @@
             dropBg = document.getElementById("drop-bg"),
             body = document.body, mouseX;
 
-    dropBtn.addEventListener("mousedown", mouseDownHandler);
+    var scrW = window.screen.width, scrH = window.screen.height,
+        cookies = document.cookie, flaState = false, isIE = !-[1,],
+        startTs, endTs, scrollList, keyCodeList = [];
+
+    if(isIE) {
+        try {
+            var swf1 = new ActiveXObject('ShockwaveFlash.ShockwaveFlash');
+//            alert('安装了Flash');
+            flaState = true;
+        } catch(e) {
+//            alert('没有安装Flash');
+            flaState = false;
+        }
+    } else {
+        try{
+            var swf2 = navigator.plugins['Shockwave Flash'];
+            if(swf2 == undefined){
+//                alert('没有安装Flash');
+                flaState = false;
+            }
+            else {
+//                alert('安装了Flash');
+                flaState = true;
+            }
+        }
+        catch(e){
+//            alert('没有安装Flash');
+            flaState = false;
+        }
+    }
+
+
+
+
+//    dropBtn.addEventListener("mousedown", mouseDownHandler);
+//    document.addEventListener("keypress", keyPressHandler);
+
+    addEventHandler(dropBtn, "mousedown", mouseDownHandler);
+    addEventHandler(document, "keypress", keyPressHandler);
 
     function mouseDownHandler(e) {
+        scrollList = [];
         mouseX = e.pageX;
+        scrollList.push({ x: mouseX, y: e.pageY });
+        startTs = new Date().getTime();
 
-        body.addEventListener('mousemove', mouseMoveHandler)
-        body.addEventListener('mouseup', mouseUpHandler)
+        addEventHandler(body, "mousemove", mouseMoveHandler);
+        addEventHandler(body, "mouseup", mouseUpHandler);
     }
 
     function mouseMoveHandler(e) {
         var moveX = e.pageX - mouseX;
+        scrollList.push({ x: e.pageX, y: e.pageY });
 //        console.log(left);
         if(moveX >= 0 && moveX <= 260) {
             dropBg.style.width = dropBtn.style.left = moveX + 'px';
@@ -82,14 +126,30 @@
         }
         var left = dropBtn.style.left.substring(0, dropBtn.style.left.length-2);
         if(left > 256) {
-            body.removeEventListener('mousemove', mouseMoveHandler);
-            body.removeEventListener('mouseup', mouseUpHandler);
+            endTs = new Date().getTime();
+            removeEventHandler(body, 'mousemove', mouseMoveHandler);
+            removeEventHandler(body, 'mouseup', mouseUpHandler);
+
+            console.log("分辨率:");
+            console.log(scrW + 'x' + scrH);
+            console.log("cookie:");
+            console.log(cookies);
+            console.log("是否安装Flash:");
+            console.log(flaState);
+            console.log('滑块拖动时间:');
+            console.log(endTs - startTs);
+            console.log('滑动轨迹:');
+            console.log(scrollList);
+            console.log('键盘敲击记录:');
+            console.log(keyCodeList);
         }
     }
 
     function mouseUpHandler(e) {
-        body.removeEventListener('mousemove', mouseMoveHandler);
-        body.removeEventListener('mouseup', mouseUpHandler);
+        endTs = new Date().getTime();
+
+        removeEventHandler(body, 'mousemove', mouseMoveHandler);
+        removeEventHandler(body, 'mouseup', mouseUpHandler);
         var inter = setInterval(function () {
             var left = dropBtn.style.left.substring(0, dropBtn.style.left.length-2);
             if(left <= 256 && left > 1) {
@@ -101,6 +161,27 @@
             }
         }, 1000/60);
     }
+
+    function keyPressHandler(event) {
+        keyCodeList.push((navigator.appname=="Netscape")? event.which: window.event.keyCode);
+    }
+
+    function addEventHandler(ele, ename, handler) {
+        if (typeof document.addEventListener != "undefined") {
+            ele.addEventListener(ename, handler);
+        } else {
+            ele.attachEvent(ename, handler);
+        }
+    }
+
+    function removeEventHandler(ele, ename, handler) {
+        if (typeof document.addEventListener != "undefined") {
+            ele.removeEventListener(ename, handler);
+        } else {
+            ele.detachEvent(ename, handler);
+        }
+    }
+
 </script>
 </body>
 </html>
