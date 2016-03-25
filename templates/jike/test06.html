@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>为三角形加上颜色</title>
+    <title>开始</title>
     <style>
         canvas {
             border: 1px solid #f00;
@@ -11,23 +11,16 @@
     <script src="../../static/js/glMatrix-0.9.5.min.js"></script>
     <script id="shader-vs" type="x-shader/x-vertex">
     attribute vec3 v3position;
-    attribute vec3 av3Color;
-    varying vec3 vv3Color;
+    varying vec2 v_texCoord;
 
     void main() {
-        vv3Color = av3Color;
+        v_texCoord = vec2((v3Position.x + 1.0)/2.0, 1.0 - (v3Position.y + 1.0)/2.0);
         gl_Position = vec4(v3position, 1.0);
     }
     </script>
     <script id="shader-fs" type="x-shader/x-fragment">
-    #ifdef GL_FRAGMENT_PRECISION_HIGH
-        precision highp float;
-    #else
-        precision mediump float;
-    #endif
-    varying vec3 vv3Color;
     void main() {
-        gl_FragColor = vec4(vv3Color, 1.0);
+        gl_FragColor = vec4(1.0, 1.0, 1.0, 1.0);  // green
     }
     </script>
     <script>
@@ -51,8 +44,6 @@
         var programObject = null;
         var triangleBuffer = null;
         var v3PositionIndex = 0;
-        var triangleColorBuffer = null;
-        var v3ColorIndex = 1;
 
         function Init() {
             var myCanvasObject = document.getElementById('myCanvas');
@@ -82,7 +73,6 @@
             webgl.attachShader(programObject, fragmentShaderObject);
 
             webgl.bindAttribLocation(programObject, v3PositionIndex, 'v3Position');
-            webgl.bindAttribLocation(programObject, v3ColorIndex, 'av3Color');
 
             webgl.linkProgram(programObject);
             if(!webgl.getProgramParameter(programObject, webgl.LINK_STATUS)) {
@@ -100,26 +90,12 @@
             webgl.bindBuffer(webgl.ARRAY_BUFFER, triangleBuffer);
             webgl.bufferData(webgl.ARRAY_BUFFER, new Float32Array(jsArrayData), webgl.STATIC_DRAW);
 
-            var jsArrayColor = [
-                1.0, 0.0, 0.0, // 上顶点
-                0.0, 1.0, 0.0, // 左顶点
-                0.0, 0.0, 1.0] // 右顶点
-
-            trianglColoreBuffer = webgl.createBuffer();
-            webgl.bindBuffer(webgl.ARRAY_BUFFER, trianglColoreBuffer);
-            webgl.bufferData(webgl.ARRAY_BUFFER, new Float32Array(jsArrayColor), webgl.STATIC_DRAW);
-
             webgl.clearColor(0.0, 0.0, 0.0, 1.0);
             webgl.clear(webgl.COLOR_BUFFER_BIT);
 
             webgl.bindBuffer(webgl.ARRAY_BUFFER, triangleBuffer);
             webgl.enableVertexAttribArray(v3PositionIndex);
             webgl.vertexAttribPointer(v3PositionIndex, 3, webgl.FLOAT, false, 0, 0);
-
-            webgl.bindBuffer(webgl.ARRAY_BUFFER, trianglColoreBuffer);
-            webgl.enableVertexAttribArray(v3ColorIndex);
-            webgl.vertexAttribPointer(v3ColorIndex, 3, webgl.FLOAT, false, 0, 0);
-
             webgl.drawArrays(webgl.TRIANGLES, 0, 3);
 
         }
