@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>纹理三角形</title>
+    <title>让三角形动起来</title>
     <style>
         canvas {
             border: 1px solid #f00;
@@ -11,11 +11,15 @@
     <script src="../../static/js/glMatrix-0.9.5.min.js"></script>
     <script id="shader-vs" type="x-shader/x-vertex">
     attribute vec3 v3Position;
+    uniform mat4 um4Rotate;
     varying vec2 v_texCoord;
 
     void main(void) {
+        vec4 v4pos = um4Rotate * vec4(v3Position, 1.0);
         v_texCoord = vec2((v3Position.x+1.0)/2.0, 1.0 - (v3Position.y + 1.0)/2.0);
-        gl_Position = vec4(v3Position, 1.0);
+        gl_Position = v4pos;
+        // v_texCoord = vec2((v3Position.x+1.0)/2.0, 1.0-(v3Position.y+1.0)/2.0);
+        // gl_Position = um4Rotate * vec4(v3Position, 1.0);
     }
     </script>
     <script id="shader-fs" type="x-shader/x-fragment">
@@ -54,49 +58,15 @@
         var v3PositionIndex = 0;
         var textureObject = null;
         var samplerIndex = -1;
+        var interval = 1000/60;
+        var angle = 0;
+        var um4RotateIndex = -1;
 
-        function Init() {
-            var myCanvasObject = document.getElementById('myCanvas');
-            webgl = myCanvasObject.getContext('experimental-webgl');
-
-            webgl.viewport(0, 0, myCanvasObject.clientWidth, myCanvasObject.clientHeight);
-
-            vertexShaderObject = webgl.createShader(webgl.VERTEX_SHADER);
-            fragmentShaderObject = webgl.createShader(webgl.FRAGMENT_SHADER);
-
-            webgl.shaderSource(vertexShaderObject, ShaderSourceFromScript('shader-vs'));
-            webgl.shaderSource(fragmentShaderObject, ShaderSourceFromScript('shader-fs'));
-
-            webgl.compileShader(vertexShaderObject);
-            webgl.compileShader(fragmentShaderObject);
-
-            if(!webgl.getShaderParameter(vertexShaderObject, webgl.COMPILE_STATUS)) {
-                alert('error: vertexShaderObject'); return;
-            }
-            if(!webgl.getShaderParameter(fragmentShaderObject, webgl.COMPILE_STATUS)) {
-                alert('error: fragmentShaderObject'); return;
-            }
-
-            programObject = webgl.createProgram();
-
-            webgl.attachShader(programObject, vertexShaderObject);
-            webgl.attachShader(programObject, fragmentShaderObject);
-
-            webgl.bindAttribLocation(programObject, v3PositionIndex, 'v3Position');
-
-            webgl.linkProgram(programObject);
-            if(!webgl.getProgramParameter(programObject, webgl.LINK_STATUS)) {
-                alert('error: programObject'); return;
-            }
-
-            samplerIndex = webgl.getUniformLocation(programObject, 's_texture');
-
-            webgl.useProgram(programObject);
-
+        function LoadData() {
             var jsArrayData = [
-                0.0, 1.0, 0.0, // 上顶点
-                -1.0, -1.0, 0.0, // 左顶点
-                1.0, 0.0, 0.0] // 右顶点
+                0.0, 0.5, 0.0, // 上顶点
+                -0.5, -0.5, 0.0, // 左顶点
+                0.5, 0.0, 0.0] // 右顶点
 
             triangleBuffer = webgl.createBuffer();
             webgl.bindBuffer(webgl.ARRAY_BUFFER, triangleBuffer);
@@ -110,6 +80,10 @@
             // 将我们指定的图像数据‘拷贝’到该纹理对象对应的存储区以使WEBGL内部能够访问到它
             webgl.texImage2D(webgl.TEXTURE_2D, 0, webgl.RGB, webgl.RGB, webgl.UNSIGNED_BYTE, img);
 
+            return 0;
+        }
+
+        function RenderScene() {
             webgl.clearColor(0.0, 0.0, 0.0, 1.0);
             webgl.clear(webgl.COLOR_BUFFER_BIT);
 
@@ -129,8 +103,57 @@
             webgl.bindTexture(webgl.TEXTURE_2D, textureObject);
             webgl.uniform1i(samplerIndex, 0);
 
-            webgl.drawArrays(webgl.TRIANGLES, 0, 3);
+            var m4Rotate = mat4.create();
+            mat4.identity(m4Rotate);
+            mat4.rotateZ(m4Rotate, angle*Math.PI/180);
+            webgl.uniformMatrix4fv(um4RotateIndex, false, m4Rotate);
 
+            webgl.drawArrays(webgl.TRIANGLES, 0, 3);
+        }
+
+        function RotateTriangle() {
+            angle += 1;
+            if(angle >= 360) angle -= 360;
+
+            RenderScene();
+        }
+
+        function Init() {
+            var myCanvasObject = document.getElementById('myCanvas');
+            webgl = myCanvasObject.getContext('experimental-webgl');
+
+            webgl.viewport(0, 0, myCanvasObject.clientWidth, myCanvasObject.clientHeight);
+
+            vertexShaderObject = webgl.createShader(webgl.VERTEX_SHADER);
+            fragmentShaderObject = webgl.createShader(webgl.FRAGMENT_SHADER);
+
+            webgl.shaderSource(vertexShaderObject, ShaderSourceFromScript('shader-vs'));
+            webgl.shaderSource(fragmentShaderObject, ShaderSourceFromScript('shader-fs'));
+
+            webgl.compileShader(vertexShaderObject);
+            webgl.compileShader(fragmentShaderObject);
+
+            if(!webgl.getShaderParameter(vertexShaderObject, webgl.COMPILE_STATUS)) { alert('error: vertexShaderObject'); return; }
+            if(!webgl.getShaderParameter(fragmentShaderObject, webgl.COMPILE_STATUS)) { alert('error: fragmentShaderObject'); return; }
+
+            programObject = webgl.createProgram();
+
+            webgl.attachShader(programObject, vertexShaderObject);
+            webgl.attachShader(programObject, fragmentShaderObject);
+
+            webgl.bindAttribLocation(programObject, v3PositionIndex, 'v3Position');
+
+            webgl.linkProgram(programObject);
+            if(!webgl.getProgramParameter(programObject, webgl.LINK_STATUS)) { alert('error: programObject'); return; }
+
+            samplerIndex = webgl.getUniformLocation(programObject, 's_texture');
+            um4RotateIndex = webgl.getUniformLocation(programObject, 'um4Rotate');
+
+            webgl.useProgram(programObject);
+
+            if(LoadData() != 0) { alert("error: LoadData()!"); return; }
+
+            window.setInterval("RotateTriangle()", interval);
         }
     </script>
 </head>

@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>第一个三维的物体：立方体</title>
+    <style>
+        canvas {
+            border: 1px solid #f00;
+        }
+    </style>
+    <script src="../../static/js/glMatrix-0.9.5.min.js"></script>
+    <script id="shader-vs" type="x-shader/x-vertex">
+    attribute vec3 v3Position;
+    attribute vec2 v2CubeTexST;
+    uniform mat4 um4Rotate;
+    varying vec2 v_texCoord;
+
+    void main(void) {
+        // vec4 v4pos = um4Rotate * vec4(v3Position, 1.0);
+        // v_texCoord = vec2((v3Position.x+1.0)/2.0, 1.0 - (v3Position.y + 1.0)/2.0);
+        // gl_Position = v4pos;
+        // v_texCoord = vec2((v3Position.x+1.0)/2.0, 1.0-(v3Position.y+1.0)/2.0);
+        // gl_Position = um4Rotate * vec4(v3Position, 1.0);
+        v_texCoord = vec2((v2CubeTexST.x+1.0)/2.0, 1.0-(v2CubeTexST.y+1.0)/2.0);
+        gl_Position = um4Rotate * vec4(v3Position, 1.0);
+    }
+    </script>
+    <script id="shader-fs" type="x-shader/x-fragment">
+    #ifdef GL_FRAGMENT_PRECISION_HIGH
+        precision highp float;
+    #else
+        precision mediump float;
+    #endif
+
+    uniform sampler2D s_texture;
+    varying vec2 v_texCoord;
+
+    void main(void) {
+        gl_FragColor = texture2D(s_texture, v_texCoord);
+    }
+    </script>
+    <script>
+        function ShaderSourceFromScript(scriptID) {
+            var shaderScript = document.getElementById(scriptID);
+            if(shaderScript == null) return "";
+
+            var sourceCode = '';
+            var child = shaderScript.firstChild;
+            while(child) {
+                if(child.nodeType == child.TEXT_NODE) sourceCode += child.textContent;
+                child = child.nextSibling;
+            }
+            return sourceCode;
+        }
+
+        var webgl = null;
+        var vertexShaderObject = null;
+        var fragmentShaderObject = null;
+        var programObject = null;
+        var triangleBuffer = null;
+        var v3PositionIndex = 0;
+        var textureObject = null;
+        var samplerIndex = -1;
+        var interval = 1000/60;
+        var angle = 0;
+        var um4RotateIndex = -1;
+        var leftKeyDown = false;
+        var rightKeyDown = false;
+        var cubeTexSTBuffer = null;
+        var cubeTexSTIndex = 1;
+        var angleX = 0;
+        var upKeyDown = false;
+        var downKeyDown = false;
+
+        function LoadData() {
+            var jsCubeData = [
+                //前
+                0.5, 0.5, 0.5,
+                0.5, -0.5, 0.5,
+                -0.5, -0.5, 0.5,
+
+                -0.5, -0.5, 0.5,
+                -0.5, 0.5, 0.5,
+                0.5, 0.5, 0.5,
+
+                //后
+                0.5, 0.5, -0.5,
+                -0.5, 0.5, -0.5,
+                -0.5, -0.5, -0.5,
+
+                -0.5, -0.5, -0.5,
+                0.5, -0.5, -0.5,
+                0.5, 0.5, -0.5,
+
+                //左
+                -0.5, 0.5, 0.5,
+                -0.5, -0.5, 0.5,
+                -0.5, -0.5, -0.5,
+
+                -0.5, -0.5, -0.5,
+                -0.5, 0.5, -0.5,
+                -0.5, 0.5, 0.5,
+
+                //右
+                0.5, 0.5, -0.5,
+                0.5, -0.5, -0.5,
+                0.5, -0.5, 0.5,
+
+                0.5, -0.5, 0.5,
+                0.5, 0.5, 0.5,
+                0.5, 0.5, -0.5,
+
+                //上
+                0.5, 0.5, -0.5,
+                0.5, 0.5, 0.5,
+                -0.5, 0.5, 0.5,
+
+                -0.5, 0.5, 0.5,
+                -0.5, 0.5, -0.5,
+                0.5, 0.5, -0.5,
+
+                //下
+                0.5, -0.5, 0.5,
+                0.5, -0.5, -0.5,
+                -0.5, -0.5, -0.5,
+
+                -0.5, -0.5, -0.5,
+                -0.5, -0.5, 0.5,
+                0.5, -0.5, 0.5
+            ];
+
+            cubeBuffer = webgl.createBuffer();
+            webgl.bindBuffer(webgl.ARRAY_BUFFER, cubeBuffer);
+            webgl.bufferData(webgl.ARRAY_BUFFER, new Float32Array(jsCubeData), webgl.STATIC_DRAW);
+
+
+            var jsCubeTexST = [
+                //前
+                0.5, 0.5,
+                0.5, -0.5,
+                -0.5, -0.5,
+
+                -0.5, -0.5,
+                -0.5, 0.5,
+                0.5, 0.5,
+
+                //后
+                0.5, 0.5,
+                -0.5, 0.5,
+                -0.5, -0.5,
+
+                -0.5, -0.5,
+                0.5, -0.5,
+                0.5, 0.5,
+
+                //左
+                0.5, 0.5,
+                -0.5, 0.5,
+                -0.5, -0.5,
+
+                -0.5, -0.5,
+                0.5, -0.5,
+                0.5, 0.5,
+
+                //右
+                0.5, -0.5,
+                -0.5, -0.5,
+                -0.5, 0.5,
+
+                -0.5, 0.5,
+                0.5, 0.5,
+                0.5, -0.5,
+
+                //上
+                0.5, -0.5,
+                0.5, 0.5,
+                -0.5, 0.5,
+
+                -0.5, 0.5,
+                -0.5, -0.5,
+                0.5, -0.5,
+
+                //下
+                0.5, 0.5,
+                0.5, -0.5,
+                -0.5, -0.5,
+
+                -0.5, -0.5,
+                -0.5, 0.5,
+                0.5, 0.5
+            ];
+
+            cubeTexSTBuffer = webgl.createBuffer();
+            webgl.bindBuffer(webgl.ARRAY_BUFFER, cubeTexSTBuffer);
+            webgl.bufferData(webgl.ARRAY_BUFFER, new Float32Array(jsCubeTexST), webgl.STATIC_DRAW);
+
+            // 创建纹理对象
+            textureObject = webgl.createTexture();
+            // 将纹理对象设置为相应的当前操作对象
+            webgl.bindTexture(webgl.TEXTURE_2D, textureObject);
+            var img = document.getElementById('myTexture');
+            // 将我们指定的图像数据‘拷贝’到该纹理对象对应的存储区以使WEBGL内部能够访问到它
+            webgl.texImage2D(webgl.TEXTURE_2D, 0, webgl.RGB, webgl.RGB, webgl.UNSIGNED_BYTE, img);
+
+            return 0;
+        }
+
+        function RenderScene() {
+            webgl.clearColor(0.0, 0.0, 0.0, 1.0);
+            webgl.clearDepth(1.0);
+            webgl.clear(webgl.COLOR_BUFFER_BIT | webgl.DEPTH_BUFFER_BIT);
+
+            webgl.bindBuffer(webgl.ARRAY_BUFFER, cubeBuffer);
+            webgl.enableVertexAttribArray(v3PositionIndex);
+            webgl.vertexAttribPointer(v3PositionIndex, 3, webgl.FLOAT, false, 0, 0);
+
+            webgl.texParameteri(webgl.TEXTURE_2D, webgl.TEXTURE_MIN_FILTER, webgl.NEAREST);
+            webgl.texParameteri(webgl.TEXTURE_2D, webgl.TEXTURE_MAG_FILTER, webgl.NEAREST);
+            webgl.texParameteri(webgl.TEXTURE_2D, webgl.TEXTURE_WRAP_S, webgl.CLAMP_TO_EDGE);
+            webgl.texParameteri(webgl.TEXTURE_2D, webgl.TEXTURE_WRAP_T, webgl.CLAMP_TO_EDGE);
+
+            // 在图像数据弄到webgl内部之后，在使用之前要给它打上一个标识（纹理单元）。
+            // 使用activeTexture(textureUnit)激活标识
+            webgl.activeTexture(webgl.TEXTURE0);
+            // 将制定纹理对象关联到当前激活的纹理单元
+            webgl.bindTexture(webgl.TEXTURE_2D, textureObject);
+            webgl.uniform1i(samplerIndex, 0);
+
+            var m4Rotate = mat4.create();
+            mat4.identity(m4Rotate);
+            mat4.rotateZ(m4Rotate, angle*Math.PI/180);
+            mat4.rotateX(m4Rotate, angleX*Math.PI/180);
+            webgl.uniformMatrix4fv(um4RotateIndex, false, m4Rotate);
+
+            webgl.enable(webgl.DEPTH_TEST);
+            webgl.frontFace(webgl.CW);
+
+            webgl.bindBuffer(webgl.ARRAY_BUFFER, cubeTexSTBuffer);
+            webgl.enableVertexAttribArray(cubeTexSTIndex);
+            webgl.vertexAttribPointer(cubeTexSTIndex, 2, webgl.FLOAT, false, 0, 0);
+
+            webgl.drawArrays(webgl.TRIANGLES, 0, 36);
+        }
+
+        function RotateTriangle() {
+            if(leftKeyDown) angle += 1;
+            if(rightKeyDown) angle -= 1;
+            if(angle >= 360) angle -= 360;
+            if(angle < 0) angle += 360;
+
+            if(upKeyDown) angleX += 1;
+            if(downKeyDown) angleX -= 1;
+            if(angleX >= 360) angleX -= 360;
+            if(angleX < 0) angleX += 360;
+
+            RenderScene();
+        }
+
+        document.onkeydown = function(e) {
+            if(e.keyCode == 37 || e.keyCode == 65) leftKeyDown = true;
+            if(e.keyCode == 39 || e.keyCode == 68) rightKeyDown = true;
+            if(e.keyCode == 38 || e.keyCode == 87) upKeyDown = true;
+            if(e.keyCode == 40 || e.keyCode == 83) downKeyDown = true;
+        }
+        document.onkeyup = function(e) {
+            if(e.keyCode == 37 || e.keyCode == 65) leftKeyDown = false;
+            if(e.keyCode == 39 || e.keyCode == 68) rightKeyDown = false;
+            if(e.keyCode == 38 || e.keyCode == 87) upKeyDown = false;
+            if(e.keyCode == 40 || e.keyCode == 83) downKeyDown = false;
+        }
+
+        function Init() {
+            var myCanvasObject = document.getElementById('myCanvas');
+            webgl = myCanvasObject.getContext('experimental-webgl');
+
+            webgl.viewport(0, 0, myCanvasObject.clientWidth, myCanvasObject.clientHeight);
+
+            vertexShaderObject = webgl.createShader(webgl.VERTEX_SHADER);
+            fragmentShaderObject = webgl.createShader(webgl.FRAGMENT_SHADER);
+
+            webgl.shaderSource(vertexShaderObject, ShaderSourceFromScript('shader-vs'));
+            webgl.shaderSource(fragmentShaderObject, ShaderSourceFromScript('shader-fs'));
+
+            webgl.compileShader(vertexShaderObject);
+            webgl.compileShader(fragmentShaderObject);
+
+            if(!webgl.getShaderParameter(vertexShaderObject, webgl.COMPILE_STATUS)) { alert('error: vertexShaderObject'); return; }
+            if(!webgl.getShaderParameter(fragmentShaderObject, webgl.COMPILE_STATUS)) { alert('error: fragmentShaderObject'); return; }
+
+            programObject = webgl.createProgram();
+
+            webgl.attachShader(programObject, vertexShaderObject);
+            webgl.attachShader(programObject, fragmentShaderObject);
+
+            webgl.bindAttribLocation(programObject, v3PositionIndex, 'v3Position');
+            webgl.bindAttribLocation(programObject, cubeTexSTIndex, 'v2CubeTexST');
+
+            webgl.linkProgram(programObject);
+            if(!webgl.getProgramParameter(programObject, webgl.LINK_STATUS)) { alert('error: programObject'); return; }
+
+            samplerIndex = webgl.getUniformLocation(programObject, 's_texture');
+            um4RotateIndex = webgl.getUniformLocation(programObject, 'um4Rotate');
+
+            webgl.useProgram(programObject);
+
+            if(LoadData() != 0) { alert("error: LoadData()!"); return; }
+
+            window.setInterval("RotateTriangle()", interval);
+        }
+    </script>
+</head>
+<body onload="Init()">
+<canvas id="myCanvas" width="600px" height="450px"></canvas>
+<img id="myTexture" src='../../static/images/001.jpg'>
+</body>
+</html>
