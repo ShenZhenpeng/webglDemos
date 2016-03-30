@@ -1,0 +1,384 @@
+<html>
+<head>
+    <meta http-equiv="content-type" content="text/html; charset=gb2312">
+    <script src="../../static/js/glMatrix-0.9.5.min.js"></script>
+
+    <script>
+        function gltSubtractVectors(v3First, v3Second, v3Result)//v3Result = v3First - v3Second
+        {
+            v3Result || (v3Result = []);
+            for(var i=0; i<3; ++i) v3Result[i] = v3First[i] - v3Second[i];
+            return v3Result;
+        }
+        function gltVectorCrossProduct(v3U, v3V, v3Result)//v3Result = v3U X v3V
+        {
+            v3Result || (v3Result = []);
+            v3Result[0] = v3U[1]*v3V[2] - v3V[1]*v3U[2];
+            v3Result[1] = -v3U[0]*v3V[2] + v3V[0]*v3U[2];
+            v3Result[2] = v3U[0]*v3V[1] - v3V[0]*v3U[1];
+            return v3Result;
+        }
+        function gltVectorDotProductV(v, vvU, vvV)//返回v维向量的点积 vvU . vvV
+        {
+            var dot = 0;
+            for(var i=0; i<v; ++i) dot += vvU[i] * vvV[i];
+            return dot;
+        }
+        function gltScaleVector(v3Vector, fScale, v3Result)//v3Result = v3Vector * fScale
+        {
+            v3Result || (v3Result = v3Vector);
+            for(var i=0; i<3; ++i) v3Result[i] = v3Vector[i] * fScale;
+            return v3Result;
+        }
+        function gltGetVectorLengthSqrd(v3Vector)//返回模长的平方
+        {
+            return (v3Vector[0]*v3Vector[0]) + (v3Vector[1]*v3Vector[1]) + (v3Vector[2]*v3Vector[2]);
+        }
+        function gltGetVectorLength(v3Vector)//返回模长
+        {
+            return Math.sqrt(gltGetVectorLengthSqrd(v3Vector));
+        }
+        function gltNormalizeVector(v3Normal)
+        {
+            var fLength = 1.0 / gltGetVectorLength(v3Normal);
+            return gltScaleVector(v3Normal, fLength);
+        }
+        function gltGetNormalVector(v3P1, v3P2, v3P3, v3Normal)//计算CCW的三个点决定的平面的法线
+        {
+            var v3V1 = [];
+            var v3V2 = [];
+
+            gltSubtractVectors(v3P2, v3P1, v3V1);
+            gltSubtractVectors(v3P3, v3P1, v3V2);
+
+            gltVectorCrossProduct(v3V1, v3V2, v3Normal);
+            return gltNormalizeVector(v3Normal);
+        }
+        function gltGetPlaneEquation(v3Point1, v3Point2, v3Point3, v4Plane)//计算CCW的三个点决定的平面的平面方程的系数
+        {
+            v4Plane || (v4Plane = []);
+            gltGetNormalVector(v3Point1, v3Point2, v3Point3, v4Plane);
+            v4Plane[3] = -(v4Plane[0] * v3Point3[0] + v4Plane[1] * v3Point3[1] + v4Plane[2] * v3Point3[2]);
+            return v4Plane;
+        }
+        function gltMakeShadowMatrix(v3Points3, v4LightPos, destMat4)
+        //v3Points3：三个v3元素的数组；是平面上CCW的三个点
+        //v4LightPos：光源位置
+        //destMat4：保存计算出的阴影矩阵，可选
+        {
+            var v4PlaneEquation = gltGetPlaneEquation(v3Points3[0], v3Points3[1], v3Points3[2]);
+            var dot = gltVectorDotProductV(4, v4PlaneEquation, v4LightPos);
+
+            destMat4 || (destMat4 = []);
+
+            // First column
+            destMat4[0] = dot - v4LightPos[0] * v4PlaneEquation[0];
+            destMat4[4] = 0.0 - v4LightPos[0] * v4PlaneEquation[1];
+            destMat4[8] = 0.0 - v4LightPos[0] * v4PlaneEquation[2];
+            destMat4[12] = 0.0 - v4LightPos[0] * v4PlaneEquation[3];
+
+            // Second column
+            destMat4[1] = 0.0 - v4LightPos[1] * v4PlaneEquation[0];
+            destMat4[5] = dot - v4LightPos[1] * v4PlaneEquation[1];
+            destMat4[9] = 0.0 - v4LightPos[1] * v4PlaneEquation[2];
+            destMat4[13] = 0.0 - v4LightPos[1] * v4PlaneEquation[3];
+
+            // Third Column
+            destMat4[2] = 0.0 - v4LightPos[2] * v4PlaneEquation[0];
+            destMat4[6] = 0.0 - v4LightPos[2] * v4PlaneEquation[1];
+            destMat4[10] = dot - v4LightPos[2] * v4PlaneEquation[2];
+            destMat4[14] = 0.0 - v4LightPos[2] * v4PlaneEquation[3];
+
+            // Fourth Column
+            destMat4[3] = 0.0 - v4LightPos[3] * v4PlaneEquation[0];
+            destMat4[7] = 0.0 - v4LightPos[3] * v4PlaneEquation[1];
+            destMat4[11] = 0.0 - v4LightPos[3] * v4PlaneEquation[2];
+            destMat4[15] = dot - v4LightPos[3] * v4PlaneEquation[3];
+
+            return destMat4;
+        }
+    </script>
+
+
+    <script id="shader-vs" type="x-shader/x-vertex">
+    attribute vec3 v3Position;
+    uniform mat4 um4Rotate;
+    varying vec3 v_texCoord;
+    uniform int uiShadowMode;
+    uniform mat4 um4Shadow;
+
+    void main(void)
+    {
+        if(uiShadowMode == 0)
+        {
+            v_texCoord = v3Position;
+            gl_Position = um4Rotate * vec4(v3Position, 1.0);
+        }
+        else if(uiShadowMode == 1) gl_Position = um4Shadow * um4Rotate * vec4(v3Position, 1.0);
+        else gl_Position = vec4(v3Position, 1.0);
+    }
+    </script>
+
+    <script id="shader-fs" type="x-shader/x-fragment">
+    #ifdef GL_FRAGMENT_PRECISION_HIGH
+        precision highp float;
+    #else
+        precision mediump float;
+    #endif
+    uniform samplerCube s_texture;
+    varying vec3 v_texCoord;
+    uniform int uiShadowMode;
+
+    void main(void)
+    {
+        if(uiShadowMode == 0) gl_FragColor = textureCube(s_texture, v_texCoord);
+        else if(uiShadowMode == 1) gl_FragColor = vec4(0.7, 0.7, 0.7, 1.0);
+        else gl_FragColor = vec4(1.0, 1.0, 1.0, 1.0);
+    }
+    </script>
+
+    <script>
+        function ShaderSourceFromScript(scriptID)
+        {
+            var shaderScript = document.getElementById(scriptID);
+            if (shaderScript == null) return "";
+
+            var sourceCode = "";
+            var child = shaderScript.firstChild;
+            while (child)
+            {
+                if (child.nodeType == child.TEXT_NODE ) sourceCode += child.textContent;
+                child = child.nextSibling;
+            }
+
+            return sourceCode;
+        }
+
+        var webgl = null;
+        var vertexShaderObject = null;
+        var fragmentShaderObject = null;
+        var programObject = null;
+        var cubeBuffer = null;
+        var cubeIndexBuffer = null;
+        var v3PositionIndex = 0;
+        var textureObject = null;
+        var samplerIndex = -1;
+        var interval = 300;
+        var angle = 0;
+        var um4RotateIndex = -1;
+        var leftKeyDown = false;
+        var rightKeyDown = false;
+        var angleX = 0;
+        var upKeyDown = false;
+        var downKeyDown = false;
+        var shadowMat4 = null;
+        var uiShadowModeIndex = -1;
+        var um4ShadowIndex = -1;
+        var shadowPlaneBuffer = null;
+
+        function LoadData()
+        {
+            var jsCubeData = [
+                0.3, 0.3, 0.3,
+                0.3, -0.3, 0.3,
+                -0.3, -0.3, 0.3,
+                -0.3, 0.3, 0.3,
+                0.3, 0.3, -0.3,
+                0.3, -0.3, -0.3,
+                -0.3, -0.3, -0.3,
+                -0.3, 0.3, -0.3
+            ];
+
+            cubeBuffer = webgl.createBuffer();
+            webgl.bindBuffer(webgl.ARRAY_BUFFER, cubeBuffer);
+            webgl.bufferData(webgl.ARRAY_BUFFER, new Float32Array(jsCubeData), webgl.STATIC_DRAW);
+
+
+            var jsCubeIndex = [
+                //前
+                1,2,3,
+                3,4,1,
+
+                //后
+                5,8,7,
+                7,6,5,
+
+                //左
+                4,3,7,
+                7,8,4,
+
+                //右
+                5,6,2,
+                2,1,5,
+
+                //上
+                5,1,4,
+                4,8,5,
+
+                //下
+                2,6,7,
+                7,3,2
+            ];
+            for(var i=0; i<jsCubeIndex.length; ++i) --jsCubeIndex[i];
+
+            cubeIndexBuffer = webgl.createBuffer();
+            webgl.bindBuffer(webgl.ELEMENT_ARRAY_BUFFER, cubeIndexBuffer);
+            webgl.bufferData(webgl.ELEMENT_ARRAY_BUFFER, new Uint8Array(jsCubeIndex), webgl.STATIC_DRAW);
+
+
+            textureObject = webgl.createTexture();
+            webgl.bindTexture(webgl.TEXTURE_CUBE_MAP, textureObject);
+            webgl.texImage2D(webgl.TEXTURE_CUBE_MAP_POSITIVE_X, 0, webgl.RGB, webgl.RGB, webgl.UNSIGNED_BYTE, document.getElementById('myTexture1'));
+            webgl.texImage2D(webgl.TEXTURE_CUBE_MAP_NEGATIVE_X, 0, webgl.RGB, webgl.RGB, webgl.UNSIGNED_BYTE, document.getElementById('myTexture2'));
+            webgl.texImage2D(webgl.TEXTURE_CUBE_MAP_POSITIVE_Y, 0, webgl.RGB, webgl.RGB, webgl.UNSIGNED_BYTE, document.getElementById('myTexture3'));
+            webgl.texImage2D(webgl.TEXTURE_CUBE_MAP_NEGATIVE_Y, 0, webgl.RGB, webgl.RGB, webgl.UNSIGNED_BYTE, document.getElementById('myTexture4'));
+            webgl.texImage2D(webgl.TEXTURE_CUBE_MAP_POSITIVE_Z, 0, webgl.RGB, webgl.RGB, webgl.UNSIGNED_BYTE, document.getElementById('myTexture5'));
+            webgl.texImage2D(webgl.TEXTURE_CUBE_MAP_NEGATIVE_Z, 0, webgl.RGB, webgl.RGB, webgl.UNSIGNED_BYTE, document.getElementById('myTexture6'));
+
+
+            var jsShadowPlaneData = [-1.0, -1.0, 1.0,   -1.0,-0.25,-1.0,   1.0,-0.25,-1.0,   1.0, -1.0, 1.0];
+            shadowPlaneBuffer  = webgl.createBuffer();
+            webgl.bindBuffer(webgl.ARRAY_BUFFER, shadowPlaneBuffer  );
+            webgl.bufferData(webgl.ARRAY_BUFFER, new Float32Array(jsShadowPlaneData ), webgl.STATIC_DRAW);
+
+            shadowMat4 = mat4.create();
+            gltMakeShadowMatrix([[-1, -1, 1], [1, -1, 1], [0, -0.25, -1]], [-1, 1, 0, 1], shadowMat4);//预先计算好阴影矩阵，这样就不用重复计算
+
+            return 0;
+        }
+
+        function RenderScene()
+        {
+            webgl.clearColor(0.0, 0.0, 0.0, 1.0);
+            webgl.clearDepth(1.0);
+            webgl.clear(webgl.COLOR_BUFFER_BIT|webgl.DEPTH_BUFFER_BIT);
+
+            webgl.texParameteri(webgl.TEXTURE_CUBE_MAP, webgl.TEXTURE_MIN_FILTER, webgl.NEAREST);
+            webgl.texParameteri(webgl.TEXTURE_CUBE_MAP, webgl.TEXTURE_MAG_FILTER, webgl.NEAREST);
+            webgl.texParameteri(webgl.TEXTURE_CUBE_MAP, webgl.TEXTURE_WRAP_S, webgl.CLAMP_TO_EDGE);
+            webgl.texParameteri(webgl.TEXTURE_CUBE_MAP, webgl.TEXTURE_WRAP_T, webgl.CLAMP_TO_EDGE);
+
+            webgl.activeTexture(webgl.TEXTURE0);
+            webgl.bindTexture(webgl.TEXTURE_CUBE_MAP, textureObject);
+            webgl.uniform1i(samplerIndex, 0);
+
+            var m4Rotate = mat4.create();
+            mat4.identity(m4Rotate);
+            mat4.rotateZ(m4Rotate, angle*Math.PI/180);
+            mat4.rotateX(m4Rotate, angleX*Math.PI/180);
+            webgl.uniformMatrix4fv(um4RotateIndex, false, m4Rotate);
+
+            webgl.frontFace(webgl.CW);
+
+
+            //画平面
+            webgl.disable(webgl.DEPTH_TEST);//相当于地面，禁止深度测试，此时深度缓冲中值保持1.0不变，表示可以被任何其它物体所遮挡
+            webgl.bindBuffer(webgl.ARRAY_BUFFER, shadowPlaneBuffer);
+            webgl.enableVertexAttribArray(v3PositionIndex);
+            webgl.vertexAttribPointer(v3PositionIndex, 3, webgl.FLOAT, false, 0, 0);
+            webgl.uniform1i(uiShadowModeIndex, 2);
+            webgl.drawArrays(webgl.TRIANGLE_FAN, 0, 4);
+
+
+            //画立方体
+            webgl.bindBuffer(webgl.ARRAY_BUFFER, cubeBuffer);
+            webgl.bindBuffer(webgl.ELEMENT_ARRAY_BUFFER, cubeIndexBuffer);
+            webgl.enableVertexAttribArray(v3PositionIndex);
+            webgl.vertexAttribPointer(v3PositionIndex, 3, webgl.FLOAT, false, 0, 0);
+            //画阴影
+            webgl.disable(webgl.DEPTH_TEST);//禁止深度测试，遮挡阴影平面
+            webgl.uniform1i(uiShadowModeIndex, 1);
+            webgl.uniformMatrix4fv(um4ShadowIndex, false, shadowMat4);
+            webgl.drawElements(webgl.TRIANGLES, 36, webgl.UNSIGNED_BYTE, 0);
+            //画立方体
+            webgl.enable(webgl.DEPTH_TEST);
+            webgl.depthFunc(webgl.LEQUAL);//使用深度测试，遮挡阴影平面和阴影
+            webgl.uniform1i(uiShadowModeIndex, 0);
+            webgl.drawElements(webgl.TRIANGLES, 36, webgl.UNSIGNED_BYTE, 0);
+        }
+
+        function RotateTriangle()
+        {
+            if(leftKeyDown) angle += 10;
+            if(rightKeyDown) angle -= 10;
+            if(angle >= 360) angle -= 360;
+            if(angle < 0) angle += 360;
+
+            if(upKeyDown) angleX += 10;
+            if(downKeyDown) angleX -= 10;
+            if(angleX >= 360) angleX -= 360;
+            if(angleX < 0) angleX += 360;
+
+            RenderScene();
+        }
+
+        document.onkeydown = function(e)
+        {
+            if(e.keyCode == 37) leftKeyDown = true;
+            if(e.keyCode == 39) rightKeyDown = true;
+            if(e.keyCode == 38) upKeyDown = true;
+            if(e.keyCode == 40) downKeyDown = true;
+        }
+        document.onkeyup = function(e)
+        {
+            if(e.keyCode == 37) leftKeyDown = false;
+            if(e.keyCode == 39) rightKeyDown = false;
+            if(e.keyCode == 38) upKeyDown = false;
+            if(e.keyCode == 40) downKeyDown = false;
+        }
+
+        function Init()
+        {
+            var myCanvasObject = document.getElementById('myCanvas');
+            webgl = myCanvasObject.getContext("experimental-webgl");
+
+            webgl.viewport(0, 0, myCanvasObject.clientWidth, myCanvasObject.clientHeight);
+
+            vertexShaderObject = webgl.createShader(webgl.VERTEX_SHADER);
+            fragmentShaderObject = webgl.createShader(webgl.FRAGMENT_SHADER);
+
+            webgl.shaderSource(vertexShaderObject, ShaderSourceFromScript("shader-vs"));
+            webgl.shaderSource(fragmentShaderObject, ShaderSourceFromScript("shader-fs"));
+
+            webgl.compileShader(vertexShaderObject);
+            webgl.compileShader(fragmentShaderObject);
+
+            if(!webgl.getShaderParameter(vertexShaderObject, webgl.COMPILE_STATUS)){alert(webgl.getShaderInfoLog(vertexShaderObject));return;}
+            if(!webgl.getShaderParameter(fragmentShaderObject, webgl.COMPILE_STATUS)){alert(webgl.getShaderInfoLog(fragmentShaderObject));return;}
+
+            programObject = webgl.createProgram();
+
+            webgl.attachShader(programObject, vertexShaderObject);
+            webgl.attachShader(programObject, fragmentShaderObject);
+
+            webgl.bindAttribLocation(programObject, v3PositionIndex, "v3Position");
+
+            webgl.linkProgram(programObject);
+            if(!webgl.getProgramParameter(programObject, webgl.LINK_STATUS)){alert(webgl.getProgramInfoLog(programObject));return;}
+
+            samplerIndex = webgl.getUniformLocation(programObject, "s_texture");
+            um4RotateIndex = webgl.getUniformLocation(programObject, "um4Rotate");
+            uiShadowModeIndex = webgl.getUniformLocation(programObject, "uiShadowMode");
+            um4ShadowIndex = webgl.getUniformLocation(programObject, "um4Shadow");
+
+            webgl.useProgram(programObject);
+
+            if(LoadData() != 0){alert("error:LoadData()!");return;}
+            // uniforms with the same name but different type/precision: uiShadowMode
+
+
+            window.setInterval("RotateTriangle()", interval);
+        }
+
+    </script>
+</head>
+<body onload='Init()'>
+    <canvas id="myCanvas" style="border:1px solid red;" width='600px' height='450px'></canvas>
+    <img id="myTexture1" src='../../static/images/001.png'><!--图片改为了6个128*128的-->
+    <img id="myTexture2" src='../../static/images/002.png'><br>
+    <img id="myTexture3" src='../../static/images/003.png'>
+    <img id="myTexture4" src='../../static/images/004.png'><br>
+    <img id="myTexture5" src='../../static/images/005.png'>
+    <img id="myTexture6" src='../../static/images/006.png'>
+</body>
+</html>
